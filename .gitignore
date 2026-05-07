@@ -1,0 +1,22 @@
+# Model weights (too large for GitHub / GitHubには大きすぎます)
+Hamster_dev/
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# Python cache / Pythonキャッシュ
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Conda / environment
+*.sh.bak
+environment_setup_patched.sh
+Miniconda3-*.sh
+
+# Misc
+.DS_Store
+*.log
+ip_eth0.txt
