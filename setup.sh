@@ -20,8 +20,7 @@ echo "========================================"
 echo ""
 echo "[0/6] Checking Conda / Conda確認..."
 
-# Automatically detect the conda installation path.
-# condaのインストールパスを自動検出します。
+# Detect conda path / condaのパスを検出
 if [ -n "$CONDA_EXE" ]; then
     CONDA_BASE=$(dirname $(dirname "$CONDA_EXE"))
 elif [ -d "/root/miniconda3" ]; then
@@ -35,22 +34,51 @@ else
 fi
 
 if [ -z "$CONDA_BASE" ]; then
-    echo "Conda not found. Installing Miniconda... / Condaが見つかりません。Minicondaをインストールします..."
+    echo "Installing Miniconda... / Minicondaをインストール中..."
     wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh
-    bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
+    bash /tmp/miniconda.sh -b -p /root/miniconda3
     rm /tmp/miniconda.sh
-    CONDA_BASE="$HOME/miniconda3"
-    export PATH="$CONDA_BASE/bin:$PATH"
-    echo "✅ Miniconda installed / インストール完了: $CONDA_BASE"
+    CONDA_BASE="/root/miniconda3"
+    echo "✅ Miniconda installed / インストール完了"
 else
     echo "✅ Conda detected at / 検出場所: $CONDA_BASE"
 fi
 
 export PATH="$CONDA_BASE/bin:$PATH"
 
-# Load conda shell functions (required for conda activate in scripts)
-# condaのシェル関数を読み込みます（スクリプト内のconda activateに必要）
+# Accept Anaconda Terms of Service (required by newer Miniconda versions)
+# 新しいMinicondaバージョンで必要なAnaconda利用規約に同意します
+"$CONDA_BASE/bin/conda" tos accept --override-channels \
+    --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
+"$CONDA_BASE/bin/conda" tos accept --override-channels \
+    --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
+
+# Load conda shell functions
+# condaのシェル関数を読み込みます
 source "$CONDA_BASE/etc/profile.d/conda.sh"
+
+# Create or fix 'vila' conda environment with Python 3.10
+# Python 3.10で'vila' conda環境を作成または修正します
+VILA_PYTHON=$(conda run -n vila python --version 2>/dev/null | grep -o "3\.[0-9]*" | head -1)
+if ! conda env list | grep -q "^vila "; then
+    echo "Creating conda environment 'vila' (Python 3.10)..."
+    echo "conda環境'vila'を作成中（Python 3.10）..."
+    conda create -n vila python=3.10 -y
+    echo "✅ Environment created / 環境を作成しました"
+elif [ "$VILA_PYTHON" != "3.10" ]; then
+    echo "Wrong Python ($VILA_PYTHON), recreating with 3.10..."
+    echo "Pythonバージョンが異なります（$VILA_PYTHON）、3.10で再作成中..."
+    conda env remove -n vila -y
+    conda create -n vila python=3.10 -y
+    echo "✅ Environment recreated / 環境を再作成しました"
+else
+    echo "✅ Environment 'vila' OK (Python 3.10)"
+fi
+
+# Activate environment
+# 環境を有効化します
+source "$CONDA_BASE/bin/activate" vila
+echo "✅ Activated: $(python --version)"
 
 # ── 1. Git LFS ──────────────────────────────────────────────
 echo ""
@@ -63,12 +91,33 @@ fi
 git lfs install
 echo "✅ git-lfs OK"
 
-# ── 2. VILA + environment_setup.sh ──────────────────────────
+# ── 2. PyTorch (before VILA to avoid torch==2.3.0 conflict) ──
 echo ""
-echo "[2/6] Installing VILA / VILAをインストール中..."
+echo "[2/6] Installing PyTorch / PyTorchをインストール中..."
+# Install PyTorch BEFORE VILA to avoid the torch==2.3.0 conflict.
+# VILA's pyproject.toml pins torch==2.3.0 which no longer exists on PyPI.
+# By installing PyTorch first and using --no-deps for VILA, we avoid this.
+#
+# torch==2.3.0の競合を避けるため、VILAより先にPyTorchをインストールします。
+# VILAのpyproject.tomlはtorch==2.3.0を指定しますが、PyPIに存在しません。
+# 先にインストールし、VILAは--no-depsを使うことで回避します。
+GPU_CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
+if [ -n "$GPU_CAP" ] && [ "$GPU_CAP" -ge 120 ] 2>/dev/null; then
+    echo "Blackwell GPU (sm_$GPU_CAP): PyTorch nightly + CUDA 12.8..."
+    pip install --pre torch torchvision torchaudio \
+        --index-url https://download.pytorch.org/whl/nightly/cu128 --quiet
+else
+    echo "Standard GPU: PyTorch stable + CUDA 12.1..."
+    echo "標準GPU: PyTorch stable + CUDA 12.1..."
+    pip install torch torchvision torchaudio \
+        --index-url https://download.pytorch.org/whl/cu121 --quiet
+fi
+echo "✅ PyTorch: $(python -c 'import torch; print(torch.__version__)')"
 
-# Clone VILA at the exact commit required by HAMSTER.
-# HAMSTERが必要とする正確なコミットでVILAをクローンします。
+# ── 3. VILA ──────────────────────────────────────────────────
+echo ""
+echo "[3/6] Installing VILA / VILAをインストール中..."
+
 if [ ! -d "VILA/.git" ]; then
     rm -rf VILA
     git clone https://github.com/NVlabs/VILA.git
@@ -76,93 +125,78 @@ fi
 cd VILA
 git checkout a5a380d6d09762d6f3fd0443aac6b475fba84f7e
 
-# Patch environment_setup.sh before running it.
-# We remove two problematic lines:
-#   1. flash_attn install: incompatible with new CUDA/PyTorch versions.
-#      We replaced it with PyTorch native SDPA in flash_attention.py.
-#   2. cuda-toolkit via conda: already installed in RunPod base image.
-#
-# 実行前にenvironment_setup.shをパッチします。
-# 問題のある2行を削除します：
-#   1. flash_attnのインストール：新しいCUDA/PyTorchバージョンと非互換。
-#      flash_attention.pyでPyTorchネイティブSDPAに置き換え済み。
-#   2. condaによるcuda-toolkit：RunPodのベースイメージに既にインストール済み。
-cp environment_setup.sh environment_setup_patched.sh
-sed -i '/flash.attn/d' environment_setup_patched.sh
-sed -i '/cuda-toolkit/d' environment_setup_patched.sh
+# Install VILA with --no-deps to skip the torch==2.3.0 pin.
+# --no-depsでtorch==2.3.0のpinをスキップしてVILAをインストールします。
+pip install --upgrade pip --quiet
+pip install -e .          --no-deps --quiet
+pip install -e ".[train]" --no-deps --quiet
+pip install -e ".[eval]"  --no-deps --quiet
 
-# Also skip the transformers_replace monkey-patches.
-# They import flash_attn inside modeling_mistral.py etc, which would break imports.
-# These patches are only needed for training (sequence parallelism), not inference.
-#
-# transformers_replaceモンキーパッチもスキップします。
-# modeling_mistral.pyなどでflash_attnをインポートするためimportが壊れます。
-# これらのパッチはトレーニング（シーケンス並列）にのみ必要で、推論には不要です。
-sed -i '/transformers_replace/d' environment_setup_patched.sh
+# Install transformers at the exact version VILA needs (from GitHub).
+# VILAが必要とする正確なバージョンのtransformersをGitHubからインストールします。
+pip install "git+https://github.com/huggingface/transformers@v4.37.2" --quiet
 
-echo "Running VILA environment_setup.sh vila (patched)..."
-echo "VILA environment_setup.sh vila（パッチ済み）を実行中..."
-bash environment_setup_patched.sh vila
-
-# Activate the newly created environment
-# 新しく作成した環境を有効化します
-source "$CONDA_BASE/bin/activate" vila
-echo "✅ VILA OK — $(python --version)"
 cd "$SCRIPT_DIR"
+echo "✅ VILA OK"
 
-# ── 3. PyTorch (GPU-aware) ───────────────────────────────────
+# ── 4. All remaining dependencies / 残りの依存パッケージ ─────
 echo ""
-echo "[3/6] Installing correct PyTorch / 正しいPyTorchをインストール中..."
+echo "[4/6] Installing dependencies / 依存パッケージをインストール中..."
 
-# Detect GPU compute capability to choose the right PyTorch build:
-#   sm_120+ (Blackwell, RTX 50xx) → nightly + CUDA 12.8
-#   sm_89 and below               → stable + CUDA 12.1
-# GPU計算能力を検出して適切なPyTorchビルドを選択します。
-GPU_CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
-if [ -n "$GPU_CAP" ] && [ "$GPU_CAP" -ge 120 ] 2>/dev/null; then
-    echo "Blackwell GPU (sm_$GPU_CAP): installing PyTorch nightly + CUDA 12.8..."
-    echo "Blackwell GPU（sm_$GPU_CAP）: PyTorch nightly + CUDA 12.8をインストール中..."
-    pip install --pre torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/nightly/cu128 --quiet
-else
-    echo "Installing PyTorch stable (CUDA 12.1)... / PyTorch stable（CUDA 12.1）をインストール中..."
-    pip install torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/cu121 --quiet
-fi
-echo "✅ PyTorch: $(python -c 'import torch; print(torch.__version__)')"
+# pydantic must be v1: deepspeed 0.9.5 uses field.required (v1 API).
+# pydantic v2 renamed it to field.is_required(), causing AttributeError.
+# pydanticはv1必須：deepspeed 0.9.5はfield.required（v1 API）を使用します。
+# pydantic v2ではfield.is_required()に改名され、AttributeErrorが発生します。
+pip install \
+    "pydantic<2.0.0" \
+    "deepspeed==0.9.5" \
+    "bitsandbytes>=0.41.0" \
+    "accelerate>=0.21.0" \
+    "sentencepiece==0.1.99" \
+    "tokenizers>=0.15.2" \
+    "shortuuid" \
+    "einops==0.6.1" \
+    "numpy==1.26.0" \
+    "timm==0.9.12" \
+    "datasets==2.16.1" \
+    "fastapi>=0.68.0" \
+    "uvicorn>=0.15.0" \
+    "gradio>=3.50.0" \
+    "python-multipart>=0.0.5" \
+    "pillow>=8.0.0" \
+    "huggingface-hub>=0.16.0" \
+    "opencv-python" \
+    "matplotlib" \
+    "openai" \
+    --quiet
 
-# ── 4. Compatibility fixes / 互換性修正 ─────────────────────
-echo ""
-echo "[4/6] Applying compatibility fixes / 互換性修正を適用中..."
+# s2wrapper: required by VILA vision encoder, not on PyPI
+# s2wrapper: VILAのビジョンエンコーダーに必要、PyPIにはありません
+pip install "git+https://github.com/bfshi/scaling_on_scales" --quiet
 
-# Fix pydantic: deepspeed 0.9.5 uses the old pydantic v1 API (field.required).
-# pydantic v2 renamed it to field.is_required(), causing AttributeError at startup.
-#
-# pydanticの修正：deepspeed 0.9.5は古いpydantic v1 API（field.required）を使用します。
-# pydantic v2ではfield.is_required()に改名され、スタートアップ時にAttributeErrorが発生します。
-pip install "pydantic<2.0.0" --quiet
-
-# Apply deepspeed monkey-patches from VILA
-# VILAのdeepspeedモンキーパッチを適用します
+# Apply deepspeed monkey-patches from VILA (fixes ZeRO runtime for inference)
+# VILAのdeepspeedモンキーパッチを適用します（推論用ZeROランタイムの修正）
 SITE_PKG=$(python -c 'import site; print(site.getsitepackages()[0])')
 cp -rv "$SCRIPT_DIR/VILA/llava/train/deepspeed_replace/"* "$SITE_PKG/deepspeed/" 2>/dev/null || true
 
-echo "✅ Fixes applied / 修正を適用しました"
+echo "✅ Dependencies installed / 依存パッケージをインストールしました"
 
 # ── 5. HAMSTER model / HAMSTERモデル ─────────────────────────
 echo ""
 echo "[5/6] Downloading HAMSTER model (~26GB) / HAMSTERモデルをダウンロード中（約26GB）..."
+echo "This may take 10-20 minutes / 10〜20分かかる場合があります..."
 if [ ! -d "Hamster_dev" ]; then
     git clone https://huggingface.co/yili18/Hamster_dev
     echo "✅ Model downloaded / モデルをダウンロードしました"
 else
-    echo "✅ Model already present, skipping / モデルは既に存在します、スキップします"
+    # Resume incomplete download if needed / 不完全なダウンロードを再開します
+    cd Hamster_dev && git lfs pull && cd "$SCRIPT_DIR"
+    echo "✅ Model ready / モデル準備完了"
 fi
 
-# ── 6. Local IP + GPU check ──────────────────────────────────
+# ── 6. Final checks / 最終確認 ───────────────────────────────
 echo ""
 echo "[6/6] Final checks / 最終確認..."
-
 hostname -I | awk '{print $1}' > ip_eth0.txt
 echo "IP: $(cat ip_eth0.txt)"
 
@@ -186,9 +220,9 @@ echo " Activate the environment before each session:"
 echo " セッションごとに環境を有効化してください："
 echo "   conda activate vila"
 echo ""
-echo " To start the inference server / 推論サーバーを起動："
+echo " Start server (Terminal 1) / サーバー起動（ターミナル1）："
 echo "   ./start_server.sh"
 echo ""
-echo " To start the Gradio interface / Gradioインターフェースを起動："
+echo " Start Gradio (Terminal 2) / Gradio起動（ターミナル2）："
 echo "   ./start_gradio.sh"
 echo "========================================"
