@@ -1,105 +1,128 @@
-# HAMSTER: Hierarchical Action Models For Open-World Robot Manipulation
+# HAMSTER — RunPod Deployment Fork
+# HAMSTER — RunPod デプロイ対応フォーク
 
-This repository contains the code for HAMSTER, a system for open-world robot manipulation using vision-language models.
+> **This is a modified version of [HAMSTER](https://github.com/liyi14/hamster) optimized for one-command deployment on RunPod GPU instances.**
+>
+> **これは [HAMSTER](https://github.com/liyi14/hamster) を RunPod GPU インスタンスへワンコマンドでデプロイできるよう改良したフォーク版です。**
 
-## Dependencies
+---
 
-This project depends on the following external repositories and resources:
+## What is HAMSTER? / HAMSTER とは？
 
-1. **VILA Repository**
-   - Source: [NVlabs/VILA](https://github.com/NVlabs/VILA)
-   - Required Commit: `da98f3b`
-   - Usage: Used as a base for the vision-language model implementation
-   - Note: This is an external dependency and should be cloned separately
+HAMSTER (**H**ierarchical **A**ction **M**odels for Open-World Robo**t** Manipulation with **E**mbodied **R**easoning) is a vision-language model system for open-world robot manipulation.
 
-2. **Model Checkpoint**
-   - Source: [yili18/Hamster_dev](https://huggingface.co/yili18/Hamster_dev)
-   - Usage: Contains the trained model weights
-   - Note: This is downloaded automatically during setup
+HAMSTER は、オープンワールドのロボット操作のためのビジョン言語モデルシステムです。
 
-## Project Structure
+---
 
-```
-.
-├── server.py              # Custom server implementation
-├── setup_server.sh        # Setup and launch script
-├── gradio_server_example.py  # Example Gradio interface
-├── ip_eth0.txt           # Stores the server IP address
-└── VILA/                  # External VILA repository (not included)
-    └── ...
-```
+## What changed in this fork? / このフォークの変更点
 
-## Usage
+This fork patches the original code to run reliably on a fresh RunPod instance:
 
-### Initial Setup
+このフォークは、新しい RunPod インスタンス上で確実に動作するよう、元のコードにパッチを適用しています：
 
-1. Clone this repository:
+| Fix / 修正 | Description / 説明 |
+|---|---|
+| `deploy.sh` | One-command setup script / ワンコマンドセットアップスクリプト |
+| `flash_attn` | Installed via pre-built wheel (no 30-min compilation) / ビルド済みホイールでインストール（30分のコンパイル不要） |
+| `VILA` environment | Follows official `environment_setup.sh` procedure / 公式手順に従った環境構築 |
+| `globals.py` | `deepspeed` import made optional for inference / 推論時に `deepspeed` のインポートをオプション化 |
+| `server.py` | Model name forced to `HAMSTER_dev` to match API / モデル名を API に合わせて `HAMSTER_dev` に固定 |
+| `gradio_server_example.py` | Model name case fixed (`Hamster_dev` → `HAMSTER_dev`) / モデル名の大文字小文字を修正 |
+
+---
+
+## Requirements / 動作要件
+
+- RunPod instance with **NVIDIA A40** (or equivalent, 40+ GB VRAM)
+- CUDA 12.x
+- At least **100 GB** of disk space on `/workspace`
+
+---
+
+## Quick Start / クイックスタート
+
+Clone the repository and run the deploy script. Everything else is automatic.
+
+リポジトリをクローンして、デプロイスクリプトを実行するだけです。あとはすべて自動です。
+
 ```bash
-git clone <your-repo-url>
-cd <your-repo-name>
+git clone https://github.com/Shappow/HAMSTER-Robot-ftlab.git
+cd HAMSTER-Robot-ftlab/HAMSTER_beta
+bash deploy.sh
 ```
 
-2. Clone the VILA repository and checkout the specific commit:
+The script will automatically: / スクリプトが自動で行うこと：
+
+1. Install `git-lfs` and `screen`
+2. Install **Miniconda** → `/workspace/miniconda3` *(persisted / 永続化)*
+3. Create conda environment `vila` → `/workspace/conda-envs/vila` *(persisted / 永続化)*
+4. Clone **VILA** at the required commit
+5. Install `flash_attn` via **pre-built wheel** *(no compilation / コンパイル不要)*
+6. Install VILA + all dependencies following the official procedure
+7. Download model weights from HuggingFace (~50 GB) *(skipped if already present / 既存の場合スキップ)*
+8. Apply all patches and start the **server on port 8000**
+
+> **Note:** Everything installed under `/workspace` persists across pod restarts.
+> `/workspace` 以下にインストールされたものはすべて Pod 再起動後も保持されます。
+
+### Setup only (no server start) / セットアップのみ（サーバー起動なし）
+
 ```bash
-git clone https://github.com/NVlabs/VILA.git
-cd VILA
-git checkout a5a380d6d09762d6f3fd0443aac6b475fba84f7e
-cd ..
+bash deploy.sh --setup-only
 ```
 
-3. Set up the VILA environment:
+---
+
+## Using the Gradio Interface / Gradio インターフェースの使用
+
+Once the server is running, open a second terminal and run:
+
+サーバーが起動したら、別のターミナルで以下を実行：
+
 ```bash
-cd VILA
-./environment_setup.py vila
-conda activate vila
-cd ..
-```
-
-4. Install additional packages for the Gradio interface:
-```bash
-pip install gradio openai opencv-python matplotlib numpy
-```
-
-### Running the Server
-
-1. Make sure you're in the VILA environment:
-```bash
-conda activate vila
-```
-
-2. Run the setup script to start the server:
-```bash
-./setup_server.sh
-```
-This will:
-- Download the model checkpoint from Hugging Face
-- Save the server IP address to `ip_eth0.txt`
-- Set up the server with the correct configuration
-- Start the server on port 8000
-
-3. The server will be available at the IP address stored in `ip_eth0.txt` on port 8000
-
-4. Use the Gradio interface by running:
-```bash
+source /workspace/miniconda3/etc/profile.d/conda.sh
+conda activate /workspace/conda-envs/vila
+cd /workspace/HAMSTER-Robot-ftlab/HAMSTER_beta
 python gradio_server_example.py
 ```
-The Gradio interface will automatically use the IP address from `ip_eth0.txt` to connect to the server.
 
-## Notes
+The Gradio UI will be available at the public URL printed in the terminal.
 
-- The VILA repository is an external dependency and should be kept separate from this repository
-- Make sure to checkout the specific commit (`a5a380d6d09762d6f3fd0443aac6b475fba84f7e`) of VILA
-- Always use the VILA environment (`conda activate vila`) when running the server
-- Model checkpoints are downloaded from Hugging Face and not included in this repository
-- Make sure you have sufficient disk space for the model checkpoint
-- The server requires GPU support for optimal performance
-- The server IP address is automatically detected and stored in `ip_eth0.txt`
+Gradio UI はターミナルに表示されるパブリック URL からアクセスできます。
 
-## License
+---
 
-[Your License Here]
+## Restarting after a pod reboot / Pod 再起動後の再起動方法
 
-## Acknowledgments
+The conda environment and model weights are persisted in `/workspace`. On a fresh pod, only system packages need to be reinstalled — `deploy.sh` handles this automatically:
 
-- VILA: [NVlabs/VILA](https://github.com/NVlabs/VILA) (commit `a5a380d6d09762d6f3fd0443aac6b475fba84f7e`)
-- Model weights: [yili18/Hamster_dev](https://huggingface.co/yili18/Hamster_dev) 
+conda 環境とモデルの重みは `/workspace` に保存されています。新しい Pod では、システムパッケージのみ再インストールが必要です — `deploy.sh` が自動で処理します：
+
+```bash
+cd /workspace/HAMSTER-Robot-ftlab/HAMSTER_beta
+bash deploy.sh
+```
+
+---
+
+## Project Structure / プロジェクト構成
+
+```
+HAMSTER_beta/
+├── deploy.sh                  # Main deployment script / メインデプロイスクリプト
+├── server.py                  # FastAPI inference server / FastAPI 推論サーバー
+├── gradio_server_example.py   # Gradio web interface / Gradio ウェブインターフェース
+├── setup_server.sh            # Legacy server start script / レガシーサーバー起動スクリプト
+├── requirements.txt           # Python dependencies / Python 依存関係
+├── examples/                  # Example images / サンプル画像
+└── VILA/                      # Cloned by deploy.sh / deploy.sh によりクローン (not in git)
+```
+
+---
+
+## Acknowledgments / 謝辞
+
+- Original HAMSTER: [liyi14/hamster](https://github.com/liyi14/hamster)
+- VILA: [NVlabs/VILA](https://github.com/NVlabs/VILA) (commit `a5a380d`)
+- Model weights: [yili18/Hamster_dev](https://huggingface.co/yili18/Hamster_dev)
