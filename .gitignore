@@ -5,18 +5,26 @@ Hamster_dev/
 *.pt
 *.pth
 
+# VILA repository (cloned by deploy.sh / deploy.sh によりクローン)
+HAMSTER_beta/VILA/
+
 # Python cache / Pythonキャッシュ
 __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
+*.egg-info
 
 # Conda / environment
+miniconda3/
+conda-envs/
 *.sh.bak
-environment_setup_patched.sh
 Miniconda3-*.sh
+
+# Logs and runtime files / ログと実行時ファイル
+*.log
+ip_eth0.txt
+26.1.1
 
 # Misc
 .DS_Store
-*.log
-ip_eth0.txt
