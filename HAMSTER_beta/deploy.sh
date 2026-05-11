@@ -11,7 +11,11 @@
 # /workspace 以下にすべて保存されるため、Pod の再起動後も維持されます。
 # =============================================================================
 
-set -euo pipefail
+set -eo pipefail
+# Note: -u (treat unbound vars as errors) is intentionally omitted.
+# conda activate/install sources third-party scripts (cuda-toolkit, etc.)
+# that reference variables like CUDAARCHS_BACKUP and NVCC_PREPEND_FLAGS
+# which may be unset in a fresh shell — -u would abort on those.
 
 # ============================================================
 # Configuration / 設定
@@ -67,7 +71,7 @@ echo "[2/8] Checking Miniconda..."
 if [ ! -f "$CONDA_ROOT/bin/conda" ]; then
     echo "      Installing Miniconda to $CONDA_ROOT..."
     wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh
-    bash /tmp/miniconda.sh -b -p "$CONDA_ROOT"
+    bash /tmp/miniconda.sh -b -u -p "$CONDA_ROOT"
     rm /tmp/miniconda.sh
     echo "      Miniconda installed."
 else
@@ -107,6 +111,7 @@ echo "[4/8] Checking VILA repository..."
 if [ ! -d "$VILA_DIR/.git" ]; then
     echo "      Cloning VILA..."
     cd "$HAMSTER_DIR"
+    rm -rf VILA
     git clone https://github.com/NVlabs/VILA.git
     cd VILA
     git checkout "$VILA_COMMIT"
@@ -200,6 +205,20 @@ if grep -q 'MODEL = "Hamster_dev"' "$GRADIO_PY"; then
 fi
 
 echo "      All patches applied."
+
+# Check example images for Gradio UI (optional but shown in the interface)
+# Gradio UI 用のサンプル画像を確認（オプションだがインターフェースに表示）
+EXAMPLES_DIR="$HAMSTER_DIR/examples"
+MISSING=0
+for img in ocr_reasoning.jpg non_prehensile.jpg spatial_world_knowledge.jpg; do
+    [ ! -f "$EXAMPLES_DIR/$img" ] && MISSING=1 && break
+done
+if [ "$MISSING" -eq 1 ]; then
+    echo "      ⚠️  Warning: examples/ images missing — Gradio will launch without demo images."
+    echo "      Copy ocr_reasoning.jpg, non_prehensile.jpg, spatial_world_knowledge.jpg into $EXAMPLES_DIR"
+else
+    echo "      Example images OK."
+fi
 
 # ============================================================
 # Step 7: Model download / モデルのダウンロード

@@ -188,12 +188,13 @@ def process_image_and_quest(image, quest, max_tokens, temperature, top_p, crop_t
     annotated_image = annotate_image(output_image.copy(), quest)
     return annotated_image, response_text
 
-# Define examples as a list of inputs.
-examples = [
+# Define examples — only include entries where the image file actually exists.
+_all_examples = [
     ["examples/ocr_reasoning.jpg", "Move the S to the plate the arrow is pointing at"],
     ["examples/non_prehensile.jpg", "open the top drawer"],
     ["examples/spatial_world_knowledge.jpg", "Have the middle block on Jensen Huang"]
 ]
+examples = [e for e in _all_examples if os.path.isfile(e[0])]
 
 with gr.Blocks() as demo:
     gr.Markdown("## HAMSTER: Hierarchical Action Models For Open-World Robot Manipulation")
@@ -214,11 +215,12 @@ with gr.Blocks() as demo:
             output_image = gr.Image(type="numpy", label="Output Image")
             response_text = gr.Textbox(label="Response")
             gr.Markdown("#### Example (click the image for instructions)")
-            gr.Examples(
-                examples=examples,
-                inputs=[image_input, quest_input],
-                label="Example"
-            )
+            if examples:
+                gr.Examples(
+                    examples=examples,
+                    inputs=[image_input, quest_input],
+                    label="Example"
+                )
             
     submit_btn.click(
         fn=process_image_and_quest, 
