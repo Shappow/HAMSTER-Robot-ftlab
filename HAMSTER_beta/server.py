@@ -126,7 +126,6 @@ async def lifespan(app: FastAPI):
     disable_torch_init()
     model_path = app.args.model_path
     model_name = get_model_name_from_path(model_path)
-    model_name = "HAMSTER_dev"  # force name to match API
     tokenizer, model, image_processor, context_len = load_pretrained_model(model_path, model_name, None)
     print(f"Model {model_name} loaded successfully. Context length: {context_len}")
     yield

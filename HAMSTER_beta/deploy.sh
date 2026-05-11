@@ -186,15 +186,6 @@ if grep -q "^import deepspeed.comm as dist" "$GLOBALS_PY"; then
     echo "      Patched globals.py (deepspeed optional import)."
 fi
 
-# Patch 2: Force model_name to "HAMSTER_dev" in server.py so the API model
-#          field matches what gradio_server_example.py sends.
-# server.py で model_name を "HAMSTER_dev" に固定し、API の model フィールドと
-# gradio_server_example.py の送信値を一致させる。
-SERVER_PY="$HAMSTER_DIR/server.py"
-if ! grep -q 'model_name = "HAMSTER_dev"' "$SERVER_PY"; then
-    sed -i 's/    model_name = get_model_name_from_path(model_path)/    model_name = get_model_name_from_path(model_path)\n    model_name = "HAMSTER_dev"  # force to match API Literal/' "$SERVER_PY"
-    echo "      Patched server.py (model_name forced to HAMSTER_dev)."
-fi
 
 # Patch 3: Fix model name in gradio_server_example.py (case mismatch)
 # gradio_server_example.py のモデル名を修正（大文字小文字の不一致）
