@@ -6,7 +6,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from io import BytesIO
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 
 import requests
 import torch
