@@ -149,13 +149,14 @@ def send_request(image, quest, max_tokens, temperature, top_p):
         SERVER_IP = f.read().strip()
     try:
         client = OpenAI(base_url=f"http://{SERVER_IP}:8000", api_key="fake-key")
+        model_name = client.models.list().data[0].id
         response = client.chat.completions.create(
             messages=[
                 {
                     "role": "user",
                     "content": [
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}},
-                        {"type": "text", "text": 
+                        {"type": "text", "text":
                             f"\nIn the image, please execute the command described in <quest>{quest}</quest>.\n"
                             "Provide a sequence of points denoting the trajectory of a robot gripper to achieve the goal.\n"
                             "Format your answer as a list of tuples enclosed by <ans> and </ans> tags. For example:\n"
@@ -168,7 +169,7 @@ def send_request(image, quest, max_tokens, temperature, top_p):
                 }
             ],
             max_tokens=int(max_tokens),
-            model=MODEL,
+            model=model_name,
             extra_body={"num_beams": 1, "use_cache": False, "temperature": float(temperature), "top_p": float(top_p)},
         )
     except Exception as inner_e:
