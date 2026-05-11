@@ -6,7 +6,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from io import BytesIO
-from typing import List, Literal, Optional, Union, get_args
+from typing import List, Optional, Union
 
 import requests
 import torch
@@ -53,19 +53,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    model: Literal[
-        "VILA1.5-3B",
-        "VILA1.5-3B-AWQ",
-        "VILA1.5-3B-S2",
-        "VILA1.5-3B-S2-AWQ",
-        "Llama-3-VILA1.5-8B",
-        "Llama-3-VILA1.5-8B-AWQ",
-        "VILA1.5-13B",
-        "VILA1.5-13B-AWQ",
-        "VILA1.5-40B",
-        "VILA1.5-40B-AWQ",
-        "HAMSTER_dev"
-    ]
+    model: str
     messages: List[ChatMessage]
     max_tokens: Optional[int] = 512
     top_p: Optional[float] = 0.9
@@ -95,18 +83,6 @@ def load_image(image_url: str) -> Image:
     return image
 
 
-def get_literal_values(cls, field_name: str):
-    field_type = cls.__annotations__.get(field_name)
-    if field_type is None:
-        raise ValueError(f"{field_name} is not a valid field name")
-    if hasattr(field_type, "__origin__") and field_type.__origin__ is Literal:
-        return get_args(field_type)
-    raise ValueError(f"{field_name} is not a Literal type")
-
-
-VILA_MODELS = get_literal_values(ChatCompletionRequest, "model")
-
-
 def normalize_image_tags(qs: str) -> str:
     image_token_se = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
     if IMAGE_PLACEHOLDER in qs:
@@ -134,7 +110,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-# Load model upon startup
+@app.get("/v1/models")
+@app.get("/models")
+async def list_models():
+    return {
+        "object": "list",
+        "data": [{"id": model_name, "object": "model", "owned_by": "hamster"}],
+    }
+
+
 @app.post("/chat/completions")
 async def chat_completions(request: ChatCompletionRequest):
     try:
@@ -143,11 +127,6 @@ async def chat_completions(request: ChatCompletionRequest):
         # print(request.messages)
         # print text content
         print("User: ", request.messages[-1].content)
-        if request.model != model_name:
-            raise ValueError(
-                f"The endpoint is configured to use the model {model_name}, "
-                f"but the request model is {request.model}"
-            )
         max_tokens = request.max_tokens
         temperature = request.temperature
         top_p = request.top_p
