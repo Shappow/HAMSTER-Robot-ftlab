@@ -23,7 +23,9 @@ This fork patches the original code to run reliably on a fresh RunPod instance:
 
 | Fix / 修正 | Description / 説明 |
 |---|---|
-| `deploy.sh` | One-command setup script / ワンコマンドセットアップスクリプト |
+| `deploy.sh` | One-command full setup script / ワンコマンド完全セットアップスクリプト |
+| `startup.sh` | Lightweight on-start script for pod restarts / Pod 再起動用の軽量起動スクリプト |
+| `activate.sh` | Quick conda environment activation / conda 環境の即時アクティベーション |
 | `flash_attn` | Installed via pre-built wheel (no 30-min compilation) / ビルド済みホイールでインストール（30分のコンパイル不要） |
 | `VILA` environment | Follows official `environment_setup.sh` procedure / 公式手順に従った環境構築 |
 | `globals.py` | `deepspeed` import made optional for inference / 推論時に `deepspeed` のインポートをオプション化 |
@@ -74,6 +76,64 @@ bash deploy.sh --setup-only
 
 ---
 
+## Pod Restarts & Server Migration / Pod 再起動・サーバー移行への対応
+
+RunPod may migrate your pod to a different physical server while keeping `/workspace` intact.
+System packages (`git-lfs`, `screen`) and the conda PATH are lost on every restart — `startup.sh` restores them automatically.
+
+RunPod はポッドを別の物理サーバーに移行することがありますが、`/workspace` の内容は保持されます。
+システムパッケージ（`git-lfs`、`screen`）と conda の PATH は再起動のたびにリセットされますが、`startup.sh` が自動で復元します。
+
+### Option 1 — Automatic (recommended) / 自動起動（推奨）
+
+Set `startup.sh` as the **RunPod "On-Start Script"** in your pod settings.
+It will run automatically on every pod start without any manual intervention.
+
+ポッド設定の **RunPod "On-Start Script"** に `startup.sh` を設定してください。
+以後、ポッド起動のたびに自動で実行されます。
+
+```
+bash /workspace/HAMSTER-Robot-ftlab/HAMSTER_beta/startup.sh
+```
+
+`startup.sh` will: / `startup.sh` が行うこと：
+- Reinstall `git-lfs` and `screen`
+- Restore conda to `PATH` and configure `~/.bashrc`
+- Restart the HAMSTER server if it is not already running
+
+`git-lfs` と `screen` の再インストール、conda の PATH 復元と `~/.bashrc` 設定、HAMSTER サーバーが停止していれば自動起動を行います。
+
+### Option 2 — Manual / 手動起動
+
+```bash
+bash /workspace/HAMSTER-Robot-ftlab/HAMSTER_beta/startup.sh
+```
+
+---
+
+## Activating the Environment / 環境のアクティベーション
+
+To work interactively in the conda environment from any terminal:
+
+任意のターミナルから conda 環境をアクティベートするには：
+
+```bash
+source /workspace/HAMSTER-Robot-ftlab/HAMSTER_beta/activate.sh
+```
+
+After activation: / アクティベーション後：
+- `conda` and `python` point to the `vila` environment / `conda` と `python` が `vila` 環境を参照
+- `PYTHONPATH` includes the VILA package / `PYTHONPATH` に VILA パッケージが含まれる
+- Working directory is set to `HAMSTER_beta/` / カレントディレクトリが `HAMSTER_beta/` に設定される
+
+> **Tip:** `startup.sh` automatically adds `alias activate='source .../activate.sh'` to `~/.bashrc`,
+> so after the first startup you can simply type `activate`.
+>
+> **ヒント:** `startup.sh` は `~/.bashrc` に `alias activate='source .../activate.sh'` を自動追加します。
+> 初回起動後は `activate` と入力するだけで環境をアクティベートできます。
+
+---
+
 ## Using the Gradio Interface / Gradio インターフェースの使用
 
 Once the server is running, open a second terminal and run:
@@ -81,9 +141,7 @@ Once the server is running, open a second terminal and run:
 サーバーが起動したら、別のターミナルで以下を実行：
 
 ```bash
-source /workspace/miniconda3/etc/profile.d/conda.sh
-conda activate /workspace/conda-envs/vila
-cd /workspace/HAMSTER-Robot-ftlab/HAMSTER_beta
+source /workspace/HAMSTER-Robot-ftlab/HAMSTER_beta/activate.sh
 python gradio_server_example.py
 ```
 
@@ -93,24 +151,13 @@ Gradio UI はターミナルに表示されるパブリック URL からアク�
 
 ---
 
-## Restarting after a pod reboot / Pod 再起動後の再起動方法
-
-The conda environment and model weights are persisted in `/workspace`. On a fresh pod, only system packages need to be reinstalled — `deploy.sh` handles this automatically:
-
-conda 環境とモデルの重みは `/workspace` に保存されています。新しい Pod では、システムパッケージのみ再インストールが必要です — `deploy.sh` が自動で処理します：
-
-```bash
-cd /workspace/HAMSTER-Robot-ftlab/HAMSTER_beta
-bash deploy.sh
-```
-
----
-
 ## Project Structure / プロジェクト構成
 
 ```
 HAMSTER_beta/
-├── deploy.sh                  # Main deployment script / メインデプロイスクリプト
+├── deploy.sh                  # Full setup script (first-time) / 完全セットアップ（初回用）
+├── startup.sh                 # Lightweight on-start script / 軽量起動スクリプト（RunPod On-Start 用）
+├── activate.sh                # Conda environment activation / conda 環境アクティベーション
 ├── server.py                  # FastAPI inference server / FastAPI 推論サーバー
 ├── gradio_server_example.py   # Gradio web interface / Gradio ウェブインターフェース
 ├── setup_server.sh            # Legacy server start script / レガシーサーバー起動スクリプト
