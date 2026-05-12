@@ -1,9 +1,9 @@
 # HAMSTER — RunPod Deployment Fork
 # HAMSTER — RunPod デプロイ対応フォーク
 
-> **This is a modified version of [HAMSTER](https://github.com/liyi14/hamster) optimized for one-command deployment on RunPod GPU instances.**
+> **This is a modified version of [HAMSTER](https://github.com/liyi14/HAMSTER_beta) optimized for one-command deployment on RunPod GPU instances.**
 >
-> **これは [HAMSTER](https://github.com/liyi14/hamster) を RunPod GPU インスタンスへワンコマンドでデプロイできるよう改良したフォーク版です。**
+> **これは [HAMSTER](https://github.com/liyi14/HAMSTER_beta) を RunPod GPU インスタンスへワンコマンドでデプロイできるよう改良したフォーク版です。**
 
 ---
 
