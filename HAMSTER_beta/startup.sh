@@ -103,7 +103,3 @@ echo " Startup complete! / 起動完了！"
 echo " To activate conda env: source $HAMSTER_DIR/activate.sh"
 echo " To monitor server:     tail -f $WORKSPACE/server.log"
 echo "============================================================"
-
-# Keep container alive — required so RunPod doesn't restart the container
-# RunPod がコンテナを再起動しないよう、プロセスを生かし続ける（必須）
-exec sleep infinity
