@@ -108,18 +108,20 @@ else
     MODEL_PATH_REL="${MODEL_PATH#$HAMSTER_DIR/}"
     echo "      Model: $MODEL_PATH_REL"
 
-    export PYTHONPATH="$HAMSTER_DIR/VILA:${PYTHONPATH:-}"
+    # Write server launch script to avoid screen quoting issues
+    # screen のクォート問題を避けるため起動スクリプトをファイルに書き出す
+    cat > /tmp/run_hamster_server.sh << SERVERSCRIPT
+#!/bin/bash
+export PYTHONPATH=$HAMSTER_DIR/VILA
+cd $HAMSTER_DIR
+$CONDA_ENV_PATH/bin/python -W ignore server.py \
+    --port 8000 \
+    --model-path "$MODEL_PATH_REL" \
+    --conv-mode vicuna_v1 2>&1 | tee $WORKSPACE/server.log
+SERVERSCRIPT
+    chmod +x /tmp/run_hamster_server.sh
 
-    screen -dmS hamster-server bash -c "
-        source $CONDA_ROOT/etc/profile.d/conda.sh
-        conda activate $CONDA_ENV_PATH
-        export PYTHONPATH=$HAMSTER_DIR/VILA:\$PYTHONPATH
-        cd $HAMSTER_DIR
-        python -W ignore server.py \
-            --port 8000 \
-            --model-path \"$MODEL_PATH_REL\" \
-            --conv-mode vicuna_v1 2>&1 | tee $WORKSPACE/server.log
-    "
+    screen -dmS hamster-server bash /tmp/run_hamster_server.sh
     echo "      Server starting in screen session 'hamster-server'."
     echo "      Monitor: tail -f $WORKSPACE/server.log"
 fi
