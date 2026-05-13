@@ -15,11 +15,9 @@ HAMSTER_DIR="$WORKSPACE/HAMSTER-Robot-ftlab/HAMSTER_beta"
 CONDA_ROOT="$WORKSPACE/miniconda3"
 CONDA_ENV_PATH="$WORKSPACE/conda-envs/vila"
 
-# Initialize conda if not already done
-# まだ初期化されていない場合は conda を初期化
-if ! command -v conda &>/dev/null; then
-    source "$CONDA_ROOT/etc/profile.d/conda.sh"
-fi
+# Initialize conda shell functions (always needed for conda activate)
+# conda activate に必要なシェル関数を常に初期化
+source "$CONDA_ROOT/etc/profile.d/conda.sh"
 
 conda activate "$CONDA_ENV_PATH"
 export PYTHONPATH="$HAMSTER_DIR/VILA:${PYTHONPATH:-}"
