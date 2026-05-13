@@ -91,11 +91,21 @@ echo "[3/4] Verifying Python environment..."
 
 conda activate "$CONDA_ENV_PATH"
 
-if ! python -c "import encodings" 2>/dev/null; then
-    echo "      Python stdlib corrupted, auto-repairing..."
-    echo "      Python 標準ライブラリが破損しています。自動修復中..."
-    conda install --prefix "$CONDA_ENV_PATH" python=3.10 --force-reinstall -y -q
-    echo "      Python stdlib restored."
+if ! "$CONDA_ENV_PATH/bin/python" -c "import encodings, urllib.parse, pathlib" 2>/dev/null; then
+    echo "      Python stdlib corrupted, rebuilding env from scratch..."
+    echo "      Python 標準ライブラリが破損しています。環境を再構築します..."
+    conda deactivate 2>/dev/null || true
+    conda env remove --prefix "$CONDA_ENV_PATH" -y 2>/dev/null || rm -rf "$CONDA_ENV_PATH"
+    conda create --prefix "$CONDA_ENV_PATH" python=3.10 -y -q
+    conda activate "$CONDA_ENV_PATH"
+    pip install -q \
+        torch==2.3.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+    pip install -q \
+        transformers==4.37.2 accelerate deepspeed==0.9.5 \
+        fastapi==0.125.0 "pydantic<2" "starlette==0.50.0" uvicorn \
+        openai pillow gradio einops timm sentencepiece
+    pip install -q flash-attn==2.5.8 --no-build-isolation
+    echo "      Environment rebuilt."
 fi
 
 python_version=$(python --version 2>&1)
