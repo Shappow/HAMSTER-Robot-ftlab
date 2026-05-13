@@ -91,7 +91,7 @@ echo "[3/4] Verifying Python environment..."
 
 conda activate "$CONDA_ENV_PATH"
 
-if ! "$CONDA_ENV_PATH/bin/python" -c "import encodings, urllib.parse, pathlib" 2>/dev/null; then
+if ! "$CONDA_ENV_PATH/bin/python" -c "import encodings, urllib.parse, pathlib, starlette.status, fastapi" 2>/dev/null; then
     echo "      Python stdlib corrupted, rebuilding env from scratch..."
     echo "      Python 標準ライブラリが破損しています。環境を再構築します..."
     conda deactivate 2>/dev/null || true
