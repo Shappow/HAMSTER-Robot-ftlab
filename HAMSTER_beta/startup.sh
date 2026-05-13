@@ -25,6 +25,24 @@ echo " HAMSTER Startup — $(date)"
 echo "============================================================"
 
 # ------------------------------------------------------------
+# Step 0: Auto-update this repo from GitHub
+# GitHub からリポジトリを自動更新
+# ------------------------------------------------------------
+REPO_DIR="$WORKSPACE/HAMSTER-Robot-ftlab"
+if [ -d "$REPO_DIR/.git" ]; then
+    echo "[0/4] Pulling latest scripts from GitHub..."
+    BEFORE=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null)
+    git -C "$REPO_DIR" pull --ff-only 2>&1 | tail -2
+    AFTER=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null)
+    if [ "$BEFORE" != "$AFTER" ]; then
+        echo "      Scripts updated — restarting with new version..."
+        echo "      スクリプトが更新されました。新バージョンで再起動します..."
+        exec bash "$HAMSTER_DIR/startup.sh"
+    fi
+    echo "      Repo up to date."
+fi
+
+# ------------------------------------------------------------
 # Step 1: System packages (lost on every pod restart)
 # システムパッケージ（ポッド再起動のたびに消える）
 # ------------------------------------------------------------
